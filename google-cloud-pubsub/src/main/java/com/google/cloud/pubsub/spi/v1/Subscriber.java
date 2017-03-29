@@ -286,8 +286,17 @@ public class Subscriber {
 
       flowController = new FlowController(builder.flowControlSettings);
 
-      executor = builder.executorProvider.getExecutor();
-      if (builder.executorProvider.shouldAutoClose()) {
+      ExecutorProvider executorProvider =
+          builder.executorProvider.isPresent()
+              ? builder.executorProvider.get()
+              : InstantiatingExecutorProvider.newBuilder()
+                  .setExecutorThreadCount(
+                      THREADS_PER_CHANNEL
+                          * builder.numChannels)
+                  .build();
+
+      executor = executorProvider.getExecutor();
+      if (executorProvider.shouldAutoClose()) {
         closeables.add(
             new AutoCloseable() {
               @Override
@@ -315,7 +324,7 @@ public class Subscriber {
               : GoogleCredentials.getApplicationDefault()
                   .createScoped(SubscriptionAdminSettings.getDefaultServiceScopes());
 
-      numChannels = Math.max(1, Runtime.getRuntime().availableProcessors()) * CHANNELS_PER_CORE;
+      numChannels = builder.numChannels;
       streamingSubscriberConnections = new ArrayList<StreamingSubscriberConnection>(numChannels);
       pollingSubscriberConnections = new ArrayList<PollingSubscriberConnection>(numChannels);
     }
@@ -518,14 +527,6 @@ public class Subscriber {
     private static final Duration MIN_ACK_EXPIRATION_PADDING = Duration.millis(100);
     private static final Duration DEFAULT_ACK_EXPIRATION_PADDING = Duration.millis(500);
 
-    static final ExecutorProvider DEFAULT_EXECUTOR_PROVIDER =
-        InstantiatingExecutorProvider.newBuilder()
-            .setExecutorThreadCount(
-                THREADS_PER_CHANNEL
-                    * CHANNELS_PER_CORE
-                    * Runtime.getRuntime().availableProcessors())
-            .build();
-
     SubscriptionName subscriptionName;
     Optional<Credentials> credentials = Optional.absent();
     MessageReceiver receiver;
@@ -534,10 +535,11 @@ public class Subscriber {
 
     FlowControlSettings flowControlSettings = FlowControlSettings.getDefaultInstance();
 
-    ExecutorProvider executorProvider = DEFAULT_EXECUTOR_PROVIDER;
+    Optional<ExecutorProvider> executorProvider = Optional.absent();
     Optional<ManagedChannelBuilder<? extends ManagedChannelBuilder<?>>> channelBuilder =
         Optional.absent();
     Optional<ApiClock> clock = Optional.absent();
+    Integer numChannels = Math.max(1, Runtime.getRuntime().availableProcessors()) * CHANNELS_PER_CORE;
 
     Builder(SubscriptionName subscriptionName, MessageReceiver receiver) {
       this.subscriptionName = subscriptionName;
@@ -593,13 +595,19 @@ public class Subscriber {
 
     /** Gives the ability to set a custom executor. */
     public Builder setExecutorProvider(ExecutorProvider executorProvider) {
-      this.executorProvider = Preconditions.checkNotNull(executorProvider);
+      this.executorProvider = Optional.fromNullable(executorProvider);
       return this;
     }
 
     /** Gives the ability to set a custom clock. */
     Builder setClock(ApiClock clock) {
       this.clock = Optional.of(clock);
+      return this;
+    }
+
+    /** Gives the ability to explicitly set the number of channels */
+    public Builder setNumChannels(Integer numChannels) {
+      this.numChannels = numChannels;
       return this;
     }
 
