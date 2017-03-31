@@ -12,7 +12,7 @@
   <parent>
     <groupId>com.google.cloud</groupId>
     <artifactId>google-cloud-pom</artifactId>
-    <version>0.10.1-alpha-AMEDIA</version>
+    <version>0.10.2-alpha-AMEDIA-SNAPSHOT</version>
   </parent>
   <properties>
     <site.installationModule>google-cloud-vision</site.installationModule>
